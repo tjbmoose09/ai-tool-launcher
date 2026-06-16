@@ -1,10 +1,25 @@
 # AI Tool Launcher
 
-AI Tool Launcher V1.11 is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
+AI Tool Launcher V1.12 is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
+
+[![AI Tool Launcher interactive demo](https://tjbmoose09.github.io/ai-tool-launcher/assets/social-card.png)](https://tjbmoose09.github.io/ai-tool-launcher/#demo)
+
+**Live interactive demo:** https://tjbmoose09.github.io/ai-tool-launcher/#demo
 
 It is designed for Windows, macOS, and Linux. On first run, the user selects the OS display, scans for installed AI tools, optionally adds tools manually, and then launches the selected tools from a terminal or app launcher.
 
 Project homepage: https://tjbmoose09.github.io/ai-tool-launcher/
+
+## What It Feels Like
+
+The launcher is built around a terminal-first status board and a right-side command deck:
+
+- Live running indicators for selected tools
+- A status terminal that rotates version, environment, state, and last-launch details
+- One-click launches for CLI tools and desktop apps
+- Local settings for title, accent color, tool selection, repo updates, and reset-session flow
+
+The GitHub Pages homepage includes the looping interactive asset used for the project marketing preview.
 
 ## Features
 
@@ -48,6 +63,22 @@ On Linux/macOS you can also run:
 ```bash
 ./bin/ai-tool-launcher
 ```
+
+Choose a browser explicitly:
+
+```bash
+./bin/ai-tool-launcher --browser firefox
+./bin/ai-tool-launcher --browser edge
+./bin/ai-tool-launcher --browser safari
+```
+
+Or set a default for your shell:
+
+```bash
+AI_TOOL_LAUNCHER_BROWSER=firefox ./bin/ai-tool-launcher
+```
+
+Supported browser values are `auto`, `brave`, `chrome`, `chromium`, `edge`, `firefox`, `safari`, and `default`.
 
 On Windows:
 

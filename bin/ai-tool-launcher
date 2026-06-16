@@ -5,6 +5,57 @@ APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${AI_TOOL_LAUNCHER_PORT:-47623}"
 HOST="127.0.0.1"
 URL="http://${HOST}:${PORT}"
+BROWSER="${AI_TOOL_LAUNCHER_BROWSER:-auto}"
+
+usage() {
+  cat <<'USAGE'
+AI Tool Launcher
+
+Usage:
+  ai-tool-launcher [--browser auto|brave|chrome|chromium|edge|firefox|safari|default]
+
+Environment:
+  AI_TOOL_LAUNCHER_PORT       Port for the local launcher server.
+  AI_TOOL_LAUNCHER_BROWSER    Browser choice. Same values as --browser.
+  NODE                        Node.js executable override.
+USAGE
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --browser)
+      if [ "$#" -lt 2 ]; then
+        echo "Missing value for --browser" >&2
+        exit 2
+      fi
+      BROWSER="$2"
+      shift 2
+      ;;
+    --browser=*)
+      BROWSER="${1#--browser=}"
+      shift
+      ;;
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+BROWSER="$(printf '%s' "${BROWSER}" | tr '[:upper:]' '[:lower:]')"
+case "${BROWSER}" in
+  auto|brave|chrome|google-chrome|chromium|edge|microsoft-edge|msedge|firefox|safari|default|system)
+    ;;
+  *)
+    echo "Unsupported browser '${BROWSER}'. Use --help for supported browser names." >&2
+    exit 2
+    ;;
+esac
 
 if [ -n "${XDG_STATE_HOME:-}" ]; then
   LOG_DIR="${XDG_STATE_HOME}/ai-tool-launcher"
@@ -29,20 +80,74 @@ if ! curl -fsS "${URL}/api/health" >/dev/null 2>&1; then
   done
 fi
 
-if command -v brave >/dev/null 2>&1; then
-  exec brave --app="${URL}" --class=ai-tool-launcher --name="AI Tool Launcher"
-fi
+open_brave() {
+  command -v brave >/dev/null 2>&1 && exec brave --app="${URL}" --class=ai-tool-launcher --name="AI Tool Launcher"
+}
 
-if command -v google-chrome-stable >/dev/null 2>&1; then
-  exec google-chrome-stable --app="${URL}"
-fi
+open_chrome() {
+  command -v google-chrome-stable >/dev/null 2>&1 && exec google-chrome-stable --app="${URL}"
+  command -v google-chrome >/dev/null 2>&1 && exec google-chrome --app="${URL}"
+}
 
-if command -v chromium >/dev/null 2>&1; then
-  exec chromium --app="${URL}"
-fi
+open_chromium() {
+  command -v chromium >/dev/null 2>&1 && exec chromium --app="${URL}"
+  command -v chromium-browser >/dev/null 2>&1 && exec chromium-browser --app="${URL}"
+}
 
-if command -v open >/dev/null 2>&1; then
-  exec open "${URL}"
-fi
+open_edge() {
+  command -v microsoft-edge-stable >/dev/null 2>&1 && exec microsoft-edge-stable --app="${URL}"
+  command -v microsoft-edge >/dev/null 2>&1 && exec microsoft-edge --app="${URL}"
+  command -v msedge >/dev/null 2>&1 && exec msedge --app="${URL}"
+  command -v open >/dev/null 2>&1 && exec open -a "Microsoft Edge" "${URL}"
+}
 
-exec xdg-open "${URL}"
+open_firefox() {
+  command -v firefox >/dev/null 2>&1 && exec firefox --new-window "${URL}"
+  command -v firefox-esr >/dev/null 2>&1 && exec firefox-esr --new-window "${URL}"
+  command -v open >/dev/null 2>&1 && exec open -a "Firefox" "${URL}"
+}
+
+open_safari() {
+  command -v open >/dev/null 2>&1 && exec open -a "Safari" "${URL}"
+}
+
+open_default() {
+  command -v open >/dev/null 2>&1 && exec open "${URL}"
+  command -v xdg-open >/dev/null 2>&1 && exec xdg-open "${URL}"
+}
+
+case "${BROWSER}" in
+  auto)
+    open_brave
+    open_chrome
+    open_chromium
+    open_edge
+    open_firefox
+    open_default
+    ;;
+  brave)
+    open_brave
+    ;;
+  chrome|google-chrome)
+    open_chrome
+    ;;
+  chromium)
+    open_chromium
+    ;;
+  edge|microsoft-edge|msedge)
+    open_edge
+    ;;
+  firefox)
+    open_firefox
+    ;;
+  safari)
+    open_safari
+    ;;
+  default|system)
+    open_default
+    ;;
+esac
+
+echo "No supported browser opener found for '${BROWSER}'." >&2
+echo "Open ${URL} manually in Safari, Edge, Firefox, or another browser." >&2
+exit 1
