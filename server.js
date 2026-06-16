@@ -791,6 +791,16 @@ async function applySelfUpdate() {
   if (!git || !fs.existsSync(path.join(APP_DIR, ".git"))) {
     throw new Error("Launcher updates require a git checkout");
   }
+  const before = await selfUpdateStatus();
+  if (!before.available) {
+    return {
+      ok: true,
+      applied: false,
+      restartRequired: false,
+      message: before.message,
+      self: before,
+    };
+  }
   const trackedStatus = await shellCommand(`git -C ${sh(APP_DIR)} status --porcelain --untracked-files=no`, 3000);
   if (trackedStatus.stdout) {
     throw new Error("Cannot update while tracked local changes are present");
@@ -805,10 +815,27 @@ async function applySelfUpdate() {
   appendLog(`[ok] launcher updated to ${versionLabel()}; restart to run it`, "ok");
   return {
     ok: true,
+    applied: true,
+    restartRequired: true,
     message: `Updated to ${versionLabel()}. Restart AI Tool Launcher to run the new version.`,
     output: pull.stdout,
+    previous: before,
     self: status,
   };
+}
+
+function restartSession() {
+  const serverFile = path.join(APP_DIR, "server.js");
+  if (process.platform === "win32") {
+    const script = `timeout /t 1 /nobreak > nul & ${winQuote(process.execPath)} ${winQuote(serverFile)}`;
+    spawnDetached("cmd.exe", ["/d", "/s", "/c", script]);
+  } else {
+    spawnDetached("/usr/bin/env", ["bash", "-lc", `sleep 1; exec ${sh(process.execPath)} ${sh(serverFile)}`]);
+  }
+  setTimeout(() => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 750).unref();
+  }, 150).unref();
 }
 
 async function launchTool(id, mode) {
@@ -1004,6 +1031,11 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/apply-update") {
     sendJson(res, 200, await applySelfUpdate());
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/reset-session") {
+    sendJson(res, 200, { ok: true, message: "Resetting launcher session" });
+    restartSession();
     return;
   }
   sendJson(res, 404, { ok: false, error: "Unknown API route" });

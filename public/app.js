@@ -15,6 +15,7 @@ const state = {
   updateMessage: "",
   updateStatus: null,
   updateAvailable: false,
+  resetRequired: false,
 };
 
 async function api(path, options = {}) {
@@ -141,6 +142,7 @@ function renderTopbar(data) {
   const prefs = data.preferences;
   const running = shownTools().filter((tool) => tool.running).length;
   const missing = shownTools().filter((tool) => !tool.installed || !tool.configured).length;
+  const needsAttention = state.updateAvailable || state.resetRequired;
   const osTabs = ["linux", "macos", "windows"].map((id) =>
     h("button", {
       class: prefs.selectedOs === id ? "active" : "",
@@ -168,12 +170,12 @@ function renderTopbar(data) {
       h("div", { class: "os-tabs" }, osTabs),
       h("button", { class: "icon-btn", title: "Toggle theme", text: prefs.theme === "dark" ? "☾" : "☀", onclick: toggleTheme }),
       h("button", {
-        class: state.updateAvailable ? "icon-btn update-attention" : "icon-btn",
-        title: state.updateAvailable ? "Settings · update available" : "Settings",
+        class: needsAttention ? "icon-btn update-attention" : "icon-btn",
+        title: state.resetRequired ? "Settings · reset required" : state.updateAvailable ? "Settings · update available" : "Settings",
         onclick: () => { state.settingsOpen = true; render(); },
       }, [
         document.createTextNode("⚙"),
-        ...(state.updateAvailable ? [h("span", { class: "attention-badge", text: "!" })] : []),
+        ...(needsAttention ? [h("span", { class: "attention-badge", text: "!" })] : []),
       ]),
     ]),
   ]);
@@ -396,8 +398,8 @@ function renderSettings(data) {
           h("span", { class: state.updateAvailable ? "section-meta update-text" : "section-meta", text: state.updateAvailable ? `${currentLabel} -> ${latestLabel || "new"}` : currentLabel }),
         ]),
         h("button", { class: "small-btn primary", text: state.busy.has("updates") ? "Checking..." : "Check Repo Updates", onclick: checkUpdates }),
-        ...(state.updateAvailable ? [
-          h("button", { class: "small-btn update-btn", style: "margin-left:8px", text: state.busy.has("apply-update") ? "Updating..." : "Update Launcher", onclick: applyUpdate }),
+        ...(state.resetRequired ? [
+          h("button", { class: "small-btn update-btn", style: "margin-left:8px", text: state.busy.has("reset-session") ? "Resetting..." : "Reset Session", onclick: resetSession }),
         ] : []),
         h("p", { class: "muted", style: "margin-top:10px", text: state.updateMessage || "Checks whether this launcher git checkout has upstream updates." }),
       ]),
@@ -531,8 +533,11 @@ async function checkUpdates(options = {}) {
   state.busy.add("updates");
   if (!automatic && !isEditingField()) render();
   try {
-    const result = await api("/api/check-updates", { method: "POST", body: "{}" });
+    const endpoint = automatic ? "/api/check-updates" : "/api/apply-update";
+    const result = await api(endpoint, { method: "POST", body: "{}" });
     setUpdateState(result.self);
+    state.resetRequired = Boolean(result.restartRequired);
+    if (result.message) state.updateMessage = result.message;
     await refresh({ skipIfEditing: true });
   } catch (error) {
     state.updateMessage = error.message || String(error);
@@ -542,19 +547,16 @@ async function checkUpdates(options = {}) {
   }
 }
 
-async function applyUpdate() {
-  if (!confirm("Update AI Tool Launcher from the upstream repo now?")) return;
-  state.busy.add("apply-update");
+async function resetSession() {
+  state.busy.add("reset-session");
   render();
   try {
-    const result = await api("/api/apply-update", { method: "POST", body: "{}" });
-    setUpdateState(result.self);
-    state.updateMessage = result.message || "Update complete. Restart the launcher to run the new version.";
-    await refresh({ skipIfEditing: true });
+    await api("/api/reset-session", { method: "POST", body: "{}" });
+    state.updateMessage = "Resetting launcher session...";
+    window.setTimeout(() => window.location.reload(), 1800);
   } catch (error) {
     state.updateMessage = error.message || String(error);
-  } finally {
-    state.busy.delete("apply-update");
+    state.busy.delete("reset-session");
     render();
   }
 }

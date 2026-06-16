@@ -1,6 +1,6 @@
 # AI Tool Launcher
 
-AI Tool Launcher V1.10 is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
+AI Tool Launcher V1.11 is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
 
 It is designed for Windows, macOS, and Linux. On first run, the user selects the OS display, scans for installed AI tools, optionally adds tools manually, and then launches the selected tools from a terminal or app launcher.
 
@@ -16,6 +16,7 @@ Project homepage: https://tjbmoose09.github.io/ai-tool-launcher/
 - Launcher cards with running indicators and uptime
 - Settings gear for rescanning, editing the launcher title, changing the accent color, and applying repo updates
 - Update notification badge when the upstream repo has a newer launcher version
+- One-click repo update with a reset-session prompt after the fast-forward pull completes
 - Local-only config storage in the user's OS config directory
 - Localhost API protected by a per-session mutation token
 - No bundled API keys or personal machine configuration
