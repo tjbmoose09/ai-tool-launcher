@@ -4,6 +4,8 @@ AI Tool Launcher is a local, cross-platform web GUI for discovering and launchin
 
 It is designed for Windows, macOS, and Linux. On first run, the user selects the OS display, scans for installed AI tools, optionally adds tools manually, and then launches the selected tools from a terminal or app launcher.
 
+Project homepage: https://tjbmoose09.github.io/ai-tool-launcher/
+
 ## Features
 
 - First-run setup for Windows, macOS, or Linux

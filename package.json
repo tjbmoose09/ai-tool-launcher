@@ -30,5 +30,6 @@
     "type": "git",
     "url": "https://github.com/tjbmoose09/ai-tool-launcher.git"
   },
+  "homepage": "https://tjbmoose09.github.io/ai-tool-launcher/",
   "license": "MIT"
 }

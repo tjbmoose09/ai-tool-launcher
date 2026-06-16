@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Social Media Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0; padding: 0;
+            width: 1200px; height: 630px;
+            background: #0C0C09;
+            color: #E8E6DD;
+            font-family: 'JetBrains Mono', monospace;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+        .accent-bar {
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            width: 40px;
+            background: #f5c211;
+        }
+        .content {
+            margin-left: 80px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        h1 {
+            font-size: 80px;
+            margin: 0;
+            letter-spacing: -4px;
+            line-height: 0.9;
+        }
+        .tagline {
+            font-size: 24px;
+            color: #6f6c62;
+            letter-spacing: 2px;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid #2A2820;
+            padding: 10px 20px;
+            border-radius: 100px;
+            width: fit-content;
+            margin-top: 20px;
+        }
+        .dot { width: 12px; height: 12px; background: #6FB07C; border-radius: 50%; box-shadow: 0 0 15px #6FB07C; }
+    </style>
+</head>
+<body>
+    <div class="accent-bar"></div>
+    <div class="content">
+        <div class="tagline">MISSION CONTROL</div>
+        <h1>AI_LAUNCHER<br>SYSTEM.READY</h1>
+        <div class="status-pill">
+            <div class="dot"></div>
+            <span style="font-weight:700; font-size:18px;">6 TOOLS CONNECTED</span>
+        </div>
+    </div>
+</body>
+</html>

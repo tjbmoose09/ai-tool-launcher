@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ad Animation</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #15140F;
+            --accent: #f5c211;
+            --fg: #E8E6DD;
+            --card: #221F18;
+            --border: #322F26;
+        }
+
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #000;
+            font-family: 'JetBrains Mono', monospace;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Desktop Wallpaper */
+        .desktop {
+            width: 1280px;
+            height: 720px;
+            background: radial-gradient(circle at 70% 30%, #1a1a15 0%, #000 100%);
+            position: relative;
+            transform: scale(0.8); /* Fit in iframe */
+            box-shadow: 0 0 100px rgba(0,0,0,1);
+        }
+
+        /* Launcher Window */
+        .window {
+            position: absolute;
+            top: 50px;
+            left: 50px;
+            width: 800px;
+            height: 500px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .window-header {
+            padding: 10px 15px;
+            background: #1C1B15;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            border-radius: 12px 12px 0 0;
+        }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: #333; }
+        .window-title { margin-left: 10px; font-size: 10px; color: #666; letter-spacing: 1px; }
+
+        .content { display: flex; flex: 1; padding: 15px; gap: 15px; }
+        .panel-left { width: 280px; background: #0c0c09; border: 1px solid var(--border); border-radius: 8px; }
+        .panel-right { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+
+        .tool-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+        }
+        .tool-icon {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; color: #fff;
+        }
+        .tool-info { flex: 1; }
+        .tool-name { font-size: 14px; font-weight: 700; color: var(--fg); }
+        .tool-cmd { font-size: 10px; color: #666; }
+        .launch-btn {
+            background: var(--accent);
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 800;
+            border: none;
+        }
+
+        /* Mock Terminal Window */
+        .terminal {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            width: 500px;
+            height: 300px;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.8);
+            z-index: 20;
+            display: none;
+            flex-direction: column;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        .terminal-header { background: #111; padding: 8px 12px; display: flex; gap: 5px; }
+        .term-body { padding: 15px; color: #0f0; font-size: 13px; flex: 1; }
+
+        /* Cursor */
+        .cursor {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            z-index: 100;
+            pointer-events: none;
+            transition: transform 0.1s;
+        }
+        .cursor svg { fill: white; stroke: black; stroke-width: 1px; }
+
+        /* Animations */
+        @keyframes cursorMove {
+            0% { top: 600px; left: 1000px; }
+            20% { top: 320px; left: 680px; } /* Move to Gemini Launch */
+            30% { top: 320px; left: 680px; transform: scale(0.9); } /* Click */
+            35% { top: 320px; left: 680px; transform: scale(1); }
+            100% { top: 320px; left: 680px; }
+        }
+
+        @keyframes fadeInTerminal {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes typing {
+            from { width: 0 }
+            to { width: 100% }
+        }
+
+        /* Trigger Classes */
+        .ad-running .cursor { animation: cursorMove 6s infinite ease-in-out; }
+        
+        .gemini-active .launch-btn { filter: brightness(1.2); box-shadow: 0 0 15px var(--accent); }
+        
+        .terminal.show {
+            display: flex;
+            animation: fadeInTerminal 0.5s forwards;
+            animation-delay: 1.8s;
+        }
+
+        .typewriter {
+            overflow: hidden;
+            white-space: nowrap;
+            margin: 0;
+            letter-spacing: 0.15em;
+            animation: typing 1.5s steps(30, end);
+            animation-delay: 2.3s;
+            animation-fill-mode: both;
+            width: 0;
+        }
+
+        .gemini-logo {
+            color: #4285F4; font-weight: 800; font-size: 24px;
+            margin-top: 20px; opacity: 0;
+            animation: fadeIn 1s forwards;
+            animation-delay: 3.8s;
+        }
+        @keyframes fadeIn { to { opacity: 1; } }
+
+    </style>
+</head>
+<body class="ad-running">
+    <div class="desktop">
+        <div class="window">
+            <div class="window-header">
+                <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                <div class="window-title">AI LAUNCHER // LINUX</div>
+            </div>
+            <div class="content">
+                <div class="panel-left"></div>
+                <div class="panel-right">
+                    <div class="tool-card">
+                        <div class="tool-icon" style="background:#C15F3C">✳</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Claude 3.7</div>
+                            <div class="tool-cmd">anthropic-cli --model sonnet</div>
+                        </div>
+                        <button class="launch-btn">LAUNCH</button>
+                    </div>
+                    <div class="tool-card" id="gemini-card">
+                        <div class="tool-icon" style="background:#3D6FC9">✦</div>
+                        <div class="tool-info">
+                            <div class="tool-name">Gemini 2.0</div>
+                            <div class="tool-cmd">gemini --cli --ultra</div>
+                        </div>
+                        <button class="launch-btn">LAUNCH</button>
+                    </div>
+                    <div class="tool-card">
+                        <div class="tool-icon" style="background:#2F8F73">◯</div>
+                        <div class="tool-info">
+                            <div class="tool-name">OpenAI o3</div>
+                            <div class="tool-cmd">openai chat --model o3-mini</div>
+                        </div>
+                        <button class="launch-btn">LAUNCH</button>
+                    </div>
+                    <div class="tool-card">
+                        <div class="tool-icon" style="background:#6366f1">◎</div>
+                        <div class="tool-info">
+                            <div class="tool-name">DeepSeek V3</div>
+                            <div class="tool-cmd">deepseek-cli run</div>
+                        </div>
+                        <button class="launch-btn">LAUNCH</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="terminal show">
+            <div class="terminal-header">
+                <div class="dot" style="background:#ff5f56"></div>
+                <div class="dot" style="background:#ffbd2e"></div>
+                <div class="dot" style="background:#27c93f"></div>
+                <div style="margin-left:auto; font-size:9px; color:#444;">bash — 80x24</div>
+            </div>
+            <div class="term-body">
+                <p class="typewriter">$ gemini --cli --ultra</p>
+                <div class="gemini-logo">
+                    <span style="color:var(--accent)">[SYSTEM]</span> Gemini 2.0 Ultra
+                    <div style="font-size:10px; color:#555; font-weight:400; margin-top:5px; line-height:1.2;">
+                        > Loading Neural Weights... [DONE]<br>
+                        > Verifying Quantum Sandbox... [OK]<br>
+                        > Authenticating Session... [SECURE]
+                    </div>
+                    <div style="font-size:12px; color:#fff; font-weight:400; margin-top:15px; border-left: 2px solid var(--accent); padding-left: 10px;">
+                        Hello, Developer. The local environment is ready.<br>
+                        Current Latency: <span style="color:#6FB07C">12ms</span><br><br>
+                        <span style="color:var(--accent)">></span> How shall we build today?
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="cursor">
+            <svg viewBox="0 0 24 24" width="24" height="24">
+                <path d="M7 2l12 11.2-5.8.8 3.3 6.1-2.2 1.2-3.3-6.1-4 3.8V2z"/>
+            </svg>
+        </div>
+    </div>
+</body>
+</html>
