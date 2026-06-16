@@ -48,6 +48,8 @@ const STATE_DIR = process.platform === "win32"
   ? path.join(process.env.LOCALAPPDATA || CONFIG_DIR, APP_NAME, "State")
   : path.join(process.env.XDG_STATE_HOME || path.join(os.homedir(), ".local", "state"), APP_SLUG);
 const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
+const DETECT_TTL_MS = 10000;
+const VERSION_TTL_MS = 60000;
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true });
 fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -286,6 +288,8 @@ function saveConfig(config) {
 
 let config = loadConfig();
 const launched = new Map();
+const detectCache = new Map();
+const versionCache = new Map();
 
 function allToolDefs() {
   const custom = Array.isArray(config.customTools) ? config.customTools : [];
@@ -375,7 +379,16 @@ function winAppCandidates(tool) {
   });
 }
 
-async function detectTool(tool) {
+function cacheKeyForTool(tool) {
+  return [tool.id, tool.bin, tool.appName, tool.linuxFlatpak].filter(Boolean).join("|");
+}
+
+async function detectTool(tool, options = {}) {
+  const cacheKey = cacheKeyForTool(tool);
+  const cached = detectCache.get(cacheKey);
+  if (!options.force && cached && Date.now() - cached.at < DETECT_TTL_MS) {
+    return { ...tool, ...cached.value };
+  }
   const [binPath, flatpak] = await Promise.all([
     commandPath(tool.bin),
     flatpakInstalled(tool.linuxFlatpak),
@@ -383,8 +396,7 @@ async function detectTool(tool) {
   const macApp = macAppPath(tool.appName || tool.name);
   const winApps = winAppCandidates(tool);
   const installed = Boolean(binPath || flatpak || macApp || winApps.length);
-  return {
-    ...tool,
+  const value = {
     installed,
     detectedPath: binPath || (flatpak ? tool.linuxFlatpak : "") || macApp || winApps[0] || "",
     detectedBy: binPath ? "path" : flatpak ? "flatpak" : macApp ? "app-bundle" : winApps.length ? "program-files" : "",
@@ -392,6 +404,8 @@ async function detectTool(tool) {
       ? tool.requiredEnv.every((key) => Boolean(process.env[key]))
       : true,
   };
+  detectCache.set(cacheKey, { at: Date.now(), value });
+  return { ...tool, ...value };
 }
 
 function parseVersion(output) {
@@ -406,11 +420,17 @@ function maskPath(value) {
 }
 
 async function getVersion(tool, detected) {
-  if (!detected.installed || !tool.versionArgs || !tool.versionArgs.length || !tool.bin) return "";
+  const cliOnly = Array.isArray(tool.kind) && tool.kind.includes("cli") && !tool.kind.includes("app");
+  if (!cliOnly || !detected.installed || !tool.versionArgs || !tool.versionArgs.length || !tool.bin) return "";
+  const cacheKey = [tool.id, detected.detectedPath, tool.versionArgs.join(" ")].join("|");
+  const cached = versionCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < VERSION_TTL_MS) return cached.value;
   const command = detected.detectedBy === "path" && detected.detectedPath ? detected.detectedPath : tool.bin;
   const result = await shellCommand(`${sh(command)} ${tool.versionArgs.map(sh).join(" ")}`, 6500);
   if (!result.ok) return "";
-  return parseVersion(result.stdout || result.stderr) || (result.stdout || result.stderr).split(/\r?\n/)[0] || "";
+  const value = parseVersion(result.stdout || result.stderr) || (result.stdout || result.stderr).split(/\r?\n/)[0] || "";
+  versionCache.set(cacheKey, { at: Date.now(), value });
+  return value;
 }
 
 async function processLines() {
@@ -428,7 +448,7 @@ function toolPatterns(tool) {
     .map((value) => String(value).toLowerCase());
 }
 
-async function isRunning(tool) {
+async function isRunning(tool, lines = null) {
   const launch = launched.get(tool.id);
   if (launch && launch.running) {
     return { running: true, startedAt: launch.startedAt, mode: launch.mode, source: "launcher" };
@@ -436,8 +456,8 @@ async function isRunning(tool) {
   const patterns = toolPatterns(tool);
   if (!patterns.length) return { running: false };
   const ownPid = String(process.pid);
-  const lines = await processLines();
-  const hit = lines.find((line) => {
+  const snapshot = lines || await processLines();
+  const hit = snapshot.find((line) => {
     const lower = line.toLowerCase();
     if (lower.includes(ownPid) || lower.includes("ai-tool-launcher/server.js")) return false;
     if (lower.includes("--version")) return false;
@@ -528,17 +548,91 @@ async function openApp(tool, detected) {
   return spawnDetached(target, []);
 }
 
-async function buildToolStatus(tool) {
-  const detected = await detectTool(tool);
-  const running = await isRunning(tool);
-  const version = await getVersion(tool, detected);
-  const selected = config.selectedToolIds.includes(tool.id);
-  const modes = tool.kind.map((mode) => ({
+function selectedToolSet() {
+  return new Set(Array.isArray(config.selectedToolIds) ? config.selectedToolIds.map(String) : []);
+}
+
+function normalizeSelectedToolIds(value) {
+  const known = new Set(allToolDefs().map((tool) => tool.id));
+  const seen = new Set();
+  const selected = [];
+  for (const id of Array.isArray(value) ? value.map(String) : []) {
+    if (!known.has(id) || seen.has(id)) continue;
+    seen.add(id);
+    selected.push(id);
+  }
+  return selected;
+}
+
+function stopDeselectedLaunches(nextSelectedIds) {
+  const next = new Set(nextSelectedIds);
+  const removed = [...selectedToolSet()].filter((id) => !next.has(id));
+  for (const id of removed) {
+    const launch = launched.get(id);
+    if (launch && launch.pid) {
+      try {
+        process.kill(-launch.pid);
+      } catch {
+        try {
+          process.kill(launch.pid);
+        } catch {
+          // The process may have already exited.
+        }
+      }
+    }
+    launched.delete(id);
+  }
+  return removed;
+}
+
+function toolModes(tool, detected) {
+  return tool.kind.map((mode) => ({
     mode,
     label: mode === "cli" ? "CLI" : "APP",
     command: displayCommand(tool, mode),
     enabled: detected.installed && detected.configured,
   }));
+}
+
+async function buildRegistryStatus(tool, selectedSet) {
+  const detected = await detectTool(tool);
+  return {
+    id: tool.id,
+    name: tool.name,
+    vendor: tool.vendor,
+    kind: tool.kind,
+    bin: tool.bin,
+    appName: tool.appName,
+    glyph: tool.glyph,
+    color: tool.color,
+    tags: tool.tags || [],
+    custom: Boolean(tool.custom),
+    selected: selectedSet.has(tool.id),
+    installed: detected.installed,
+    configured: detected.configured,
+    detectedPath: maskPath(detected.detectedPath),
+    detectedBy: detected.detectedBy,
+    version: "",
+    updateHint: tool.updateHint || "",
+    running: false,
+    runningSource: "",
+    startedAt: null,
+    lastLaunched: config.lastLaunched[tool.id] || null,
+    modes: toolModes(tool, detected),
+    statusText: !detected.installed
+      ? "not installed"
+      : !detected.configured
+        ? "needs environment"
+        : "ready",
+  };
+}
+
+async function buildToolStatus(tool, processSnapshot = null) {
+  const detected = await detectTool(tool);
+  const running = await isRunning(tool, processSnapshot);
+  const version = await getVersion(tool, detected);
+  const selected = selectedToolSet().has(tool.id);
+  const modes = toolModes(tool, detected);
   return {
     id: tool.id,
     name: tool.name,
@@ -573,9 +667,14 @@ async function buildToolStatus(tool) {
 }
 
 async function statusPayload() {
-  const all = await Promise.all(allToolDefs().map(buildToolStatus));
-  const selected = all.filter((tool) => config.selectedToolIds.includes(tool.id));
-  const shown = config.firstRunComplete ? selected : all;
+  const defs = allToolDefs();
+  const selectedSet = selectedToolSet();
+  const selectedDefs = defs.filter((tool) => selectedSet.has(tool.id));
+  const registry = await Promise.all(defs.map((tool) => buildRegistryStatus(tool, selectedSet)));
+  const processSnapshot = config.firstRunComplete && selectedDefs.length ? await processLines() : [];
+  const tools = config.firstRunComplete
+    ? await Promise.all(selectedDefs.map((tool) => buildToolStatus(tool, processSnapshot)))
+    : registry;
   return {
     app: {
       name: APP_NAME,
@@ -591,8 +690,8 @@ async function statusPayload() {
       theme: config.theme,
       accent: config.accent,
     },
-    tools: shown,
-    registry: all,
+    tools,
+    registry,
     log: config.launchLog || [],
     now: Date.now(),
   };
@@ -606,6 +705,11 @@ function readPackageVersion() {
   }
 }
 
+function versionLabel(version = readPackageVersion()) {
+  const parts = String(version || "0.0.0").split(".");
+  return `V${parts[0] || "0"}.${parts[1] || "0"}`;
+}
+
 function packageRepository() {
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(APP_DIR, "package.json"), "utf8"));
@@ -616,7 +720,7 @@ function packageRepository() {
 }
 
 async function scanTools() {
-  const results = (await Promise.all(allToolDefs().map(detectTool))).map((tool) => ({
+  const results = (await Promise.all(allToolDefs().map((tool) => detectTool(tool, { force: true })))).map((tool) => ({
     ...tool,
     detectedPath: maskPath(tool.detectedPath),
   }));
@@ -627,28 +731,92 @@ async function scanTools() {
 async function selfUpdateStatus() {
   const git = await commandPath("git");
   if (!git || !fs.existsSync(path.join(APP_DIR, ".git"))) {
-    return { available: false, message: "Repo update check unavailable outside a git checkout" };
+    return {
+      available: false,
+      canApply: false,
+      message: "Repo update check unavailable outside a git checkout",
+      currentVersion: readPackageVersion(),
+      currentLabel: versionLabel(),
+    };
   }
-  await shellCommand(`git -C ${sh(APP_DIR)} fetch --quiet`, 15000);
+  const fetch = await shellCommand(`git -C ${sh(APP_DIR)} fetch --quiet`, 15000);
   const branch = await shellCommand(`git -C ${sh(APP_DIR)} branch --show-current`, 3000);
   const local = await shellCommand(`git -C ${sh(APP_DIR)} rev-parse HEAD`, 3000);
   const upstream = await shellCommand(`git -C ${sh(APP_DIR)} rev-parse @{u}`, 3000);
-  if (!branch.ok || !local.ok || !upstream.ok) {
-    return { available: false, message: "No upstream branch configured" };
+  if (!fetch.ok) {
+    return {
+      available: false,
+      canApply: false,
+      message: "Could not reach the upstream repo",
+      currentVersion: readPackageVersion(),
+      currentLabel: versionLabel(),
+    };
   }
+  if (!branch.ok || !local.ok || !upstream.ok) {
+    return {
+      available: false,
+      canApply: false,
+      message: "No upstream branch configured",
+      currentVersion: readPackageVersion(),
+      currentLabel: versionLabel(),
+    };
+  }
+  const remotePackage = await shellCommand(`git -C ${sh(APP_DIR)} show ${sh("@{u}:package.json")}`, 3000);
+  let latestVersion = "";
+  if (remotePackage.ok && remotePackage.stdout) {
+    try {
+      latestVersion = JSON.parse(remotePackage.stdout).version || "";
+    } catch {
+      latestVersion = "";
+    }
+  }
+  const available = local.stdout !== upstream.stdout;
   return {
-    available: local.stdout !== upstream.stdout,
-    message: local.stdout !== upstream.stdout
-      ? `Updates available on ${branch.stdout}`
+    available,
+    canApply: available,
+    message: available
+      ? `Update available: ${latestVersion ? versionLabel(latestVersion) : "new repo version"} on ${branch.stdout}`
       : `Up to date on ${branch.stdout}`,
+    currentVersion: readPackageVersion(),
+    currentLabel: versionLabel(),
+    latestVersion,
+    latestLabel: latestVersion ? versionLabel(latestVersion) : "",
     local: local.stdout,
     upstream: upstream.stdout,
+  };
+}
+
+async function applySelfUpdate() {
+  const git = await commandPath("git");
+  if (!git || !fs.existsSync(path.join(APP_DIR, ".git"))) {
+    throw new Error("Launcher updates require a git checkout");
+  }
+  const trackedStatus = await shellCommand(`git -C ${sh(APP_DIR)} status --porcelain --untracked-files=no`, 3000);
+  if (trackedStatus.stdout) {
+    throw new Error("Cannot update while tracked local changes are present");
+  }
+  const pull = await shellCommand(`git -C ${sh(APP_DIR)} pull --ff-only`, 30000);
+  if (!pull.ok) {
+    throw new Error(pull.stderr || pull.stdout || "Update failed");
+  }
+  detectCache.clear();
+  versionCache.clear();
+  const status = await selfUpdateStatus();
+  appendLog(`[ok] launcher updated to ${versionLabel()}; restart to run it`, "ok");
+  return {
+    ok: true,
+    message: `Updated to ${versionLabel()}. Restart AI Tool Launcher to run the new version.`,
+    output: pull.stdout,
+    self: status,
   };
 }
 
 async function launchTool(id, mode) {
   const tool = allToolDefs().find((item) => item.id === id);
   if (!tool) throw new Error("Unknown tool");
+  if (config.firstRunComplete && !selectedToolSet().has(tool.id)) {
+    throw new Error(`${tool.name} is not selected in this launcher`);
+  }
   if (!tool.kind.includes(mode)) throw new Error("Unsupported launch mode");
   const detected = await detectTool(tool);
   if (!detected.installed) throw new Error(`${tool.name} is not installed`);
@@ -771,7 +939,7 @@ async function handleApi(req, res, pathname) {
     config = {
       ...config,
       selectedOs: ["linux", "macos", "windows"].includes(body.selectedOs) ? body.selectedOs : config.selectedOs,
-      title: String(body.title || config.title).slice(0, 80),
+      title: body.title !== undefined ? (String(body.title).slice(0, 80) || "AI Launcher") : config.title,
       theme: ["light", "dark"].includes(body.theme) ? body.theme : config.theme,
       accent: /^#[0-9a-f]{6}$/i.test(body.accent || "") ? body.accent : config.accent,
     };
@@ -781,11 +949,14 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/setup") {
     const body = await readBody(req);
+    const selectedToolIds = normalizeSelectedToolIds(body.selectedToolIds);
+    const removed = stopDeselectedLaunches(selectedToolIds);
     config.selectedOs = ["linux", "macos", "windows"].includes(body.selectedOs) ? body.selectedOs : hostOs();
-    config.selectedToolIds = Array.isArray(body.selectedToolIds) ? body.selectedToolIds.map(String) : [];
-    config.title = String(body.title || config.title || "AI Launcher").slice(0, 80);
+    config.selectedToolIds = selectedToolIds;
+    config.title = body.title !== undefined ? (String(body.title).slice(0, 80) || "AI Launcher") : (config.title || "AI Launcher");
     config.firstRunComplete = true;
     appendLog(`[ok] setup complete · ${config.selectedToolIds.length} tools selected`, "ok");
+    if (removed.length) appendLog(`[--] ${removed.length} deselected tools stopped`, "dim");
     saveConfig(config);
     sendJson(res, 200, { ok: true });
     return;
@@ -807,7 +978,10 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/tool-selection") {
     const body = await readBody(req);
-    config.selectedToolIds = Array.isArray(body.selectedToolIds) ? body.selectedToolIds.map(String) : [];
+    const selectedToolIds = normalizeSelectedToolIds(body.selectedToolIds);
+    const removed = stopDeselectedLaunches(selectedToolIds);
+    config.selectedToolIds = selectedToolIds;
+    if (removed.length) appendLog(`[--] ${removed.length} deselected tools stopped`, "dim");
     saveConfig(config);
     sendJson(res, 200, { ok: true });
     return;
@@ -826,6 +1000,10 @@ async function handleApi(req, res, pathname) {
     const self = await selfUpdateStatus();
     appendLog(self.message, self.available ? "warn" : "ok");
     sendJson(res, 200, { ok: true, self });
+    return;
+  }
+  if (req.method === "POST" && pathname === "/api/apply-update") {
+    sendJson(res, 200, await applySelfUpdate());
     return;
   }
   sendJson(res, 404, { ok: false, error: "Unknown API route" });

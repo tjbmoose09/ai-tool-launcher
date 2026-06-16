@@ -10,8 +10,11 @@ const state = {
   phase: 0,
   settingsOpen: false,
   setupSelections: new Set(),
+  setupSelectionReady: false,
   busy: new Set(),
   updateMessage: "",
+  updateStatus: null,
+  updateAvailable: false,
 };
 
 async function api(path, options = {}) {
@@ -66,6 +69,44 @@ function osLabel(osName) {
   return { linux: "Linux", macos: "macOS", windows: "Windows" }[osName] || osName;
 }
 
+function versionLabel(version) {
+  const parts = String(version || "0.0.0").split(".");
+  return `V${parts[0] || "0"}.${parts[1] || "0"}`;
+}
+
+function isEditingField() {
+  const active = document.activeElement;
+  return Boolean(active && ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName));
+}
+
+function applyAppearance(prefs = state.data && state.data.preferences) {
+  if (!prefs) return;
+  document.documentElement.style.setProperty("--accent", prefs.accent || "#f5c211");
+  app.className = `app theme-${prefs.theme || "dark"}`;
+}
+
+function previewTitle(value) {
+  const title = value || "AI Launcher";
+  document.querySelectorAll(".apptitle, .taskbar-title").forEach((node) => {
+    node.textContent = title;
+  });
+}
+
+function previewAccent(value) {
+  if (/^#[0-9a-f]{6}$/i.test(value || "")) {
+    document.documentElement.style.setProperty("--accent", value);
+  }
+}
+
+function mergePreferences(next = {}) {
+  if (!state.data) return;
+  const allowed = ["firstRunComplete", "selectedOs", "title", "theme", "accent"];
+  for (const key of allowed) {
+    if (next[key] !== undefined) state.data.preferences[key] = next[key];
+  }
+  applyAppearance(state.data.preferences);
+}
+
 function shownTools() {
   return state.data ? state.data.tools : [];
 }
@@ -76,7 +117,7 @@ function registryTools() {
 
 function selectedIds() {
   const prefs = state.data.preferences;
-  if (!prefs.firstRunComplete && state.setupSelections.size) return state.setupSelections;
+  if (!prefs.firstRunComplete && state.setupSelectionReady) return state.setupSelections;
   return new Set((state.data.registry || []).filter((tool) => tool.selected).map((tool) => tool.id));
 }
 
@@ -123,9 +164,17 @@ function renderTopbar(data) {
         h("span", { class: missing ? "dot warn" : "dot live" }),
         h("span", { text: missing ? `${missing} needs setup` : "ready" }),
       ]),
+      h("div", { class: "pill version-pill", text: versionLabel(data.app.version) }),
       h("div", { class: "os-tabs" }, osTabs),
       h("button", { class: "icon-btn", title: "Toggle theme", text: prefs.theme === "dark" ? "☾" : "☀", onclick: toggleTheme }),
-      h("button", { class: "icon-btn", title: "Settings", text: "⚙", onclick: () => { state.settingsOpen = true; render(); } }),
+      h("button", {
+        class: state.updateAvailable ? "icon-btn update-attention" : "icon-btn",
+        title: state.updateAvailable ? "Settings · update available" : "Settings",
+        onclick: () => { state.settingsOpen = true; render(); },
+      }, [
+        document.createTextNode("⚙"),
+        ...(state.updateAvailable ? [h("span", { class: "attention-badge", text: "!" })] : []),
+      ]),
     ]),
   ]);
 }
@@ -234,8 +283,12 @@ function renderTaskbar(data) {
 function renderSetup(data) {
   const tools = registryTools();
   const ids = selectedIds();
-  if (!state.setupSelections.size) {
-    for (const tool of tools.filter((tool) => tool.installed)) state.setupSelections.add(tool.id);
+  if (!state.setupSelectionReady) {
+    const selected = new Set((state.data.registry || []).filter((tool) => tool.selected).map((tool) => tool.id));
+    state.setupSelections = selected.size
+      ? selected
+      : new Set(tools.filter((tool) => tool.installed).map((tool) => tool.id));
+    state.setupSelectionReady = true;
   }
 
   const rows = tools.map((tool) => {
@@ -275,7 +328,7 @@ function renderSetup(data) {
           ]),
           h("div", { class: "field" }, [
             h("span", { text: "Launcher title" }),
-            h("input", { id: "setupTitle", value: data.preferences.title || "AI Launcher" }),
+            h("input", { id: "setupTitle", value: data.preferences.title || "AI Launcher", oninput: (event) => previewTitle(event.target.value) }),
           ]),
           h("button", { class: "small-btn primary", text: "Scan For Tools", onclick: runScan }),
           h("p", { class: "muted", style: "margin-top:12px", text: `Host detected as ${osLabel(data.app.hostOs)}. Scan results are stored only in your local config.` }),
@@ -298,6 +351,9 @@ function renderSetup(data) {
 
 function renderSettings(data) {
   if (!state.settingsOpen) return null;
+  const update = state.updateStatus || {};
+  const currentLabel = update.currentLabel || versionLabel(data.app.version);
+  const latestLabel = update.latestLabel || "";
   return h("aside", { class: "drawer" }, [
     h("div", { class: "drawer-head" }, [
       h("h2", { text: "Settings" }),
@@ -307,11 +363,11 @@ function renderSettings(data) {
       h("div", { class: "panel" }, [
         h("div", { class: "field" }, [
           h("span", { text: "Launcher title" }),
-          h("input", { id: "titleInput", value: data.preferences.title || "AI Launcher" }),
+          h("input", { id: "titleInput", value: data.preferences.title || "AI Launcher", oninput: (event) => previewTitle(event.target.value) }),
         ]),
         h("div", { class: "field" }, [
           h("span", { text: "Accent color" }),
-          h("input", { id: "accentInput", type: "color", value: data.preferences.accent || "#f5c211" }),
+          h("input", { id: "accentInput", type: "color", value: data.preferences.accent || "#f5c211", oninput: (event) => previewAccent(event.target.value) }),
         ]),
         h("button", { class: "small-btn primary", text: "Save Appearance", onclick: saveAppearance }),
       ]),
@@ -321,14 +377,28 @@ function renderSettings(data) {
           h("span", { class: "section-meta", text: `${shownTools().length} selected` }),
         ]),
         h("button", { class: "small-btn primary", text: "Scan For New Tools", onclick: runScan }),
-        h("button", { class: "small-btn", style: "margin-left:8px", text: "Edit Selection", onclick: () => { state.data.preferences.firstRunComplete = false; render(); } }),
+        h("button", {
+          class: "small-btn",
+          style: "margin-left:8px",
+          text: "Edit Selection",
+          onclick: () => {
+            state.setupSelections = new Set((state.data.registry || []).filter((tool) => tool.selected).map((tool) => tool.id));
+            state.setupSelectionReady = true;
+            state.data.preferences.firstRunComplete = false;
+            render();
+          },
+        }),
         h("button", { class: "small-btn", style: "margin-left:8px", text: "Add Manual", onclick: () => showManualPrompt() }),
       ]),
       h("div", { class: "panel" }, [
         h("div", { class: "section-head" }, [
-          h("span", { class: "section-title", text: "UPDATES" }),
+          h("span", { class: "section-title", text: state.updateAvailable ? "UPDATES !" : "UPDATES" }),
+          h("span", { class: state.updateAvailable ? "section-meta update-text" : "section-meta", text: state.updateAvailable ? `${currentLabel} -> ${latestLabel || "new"}` : currentLabel }),
         ]),
         h("button", { class: "small-btn primary", text: state.busy.has("updates") ? "Checking..." : "Check Repo Updates", onclick: checkUpdates }),
+        ...(state.updateAvailable ? [
+          h("button", { class: "small-btn update-btn", style: "margin-left:8px", text: state.busy.has("apply-update") ? "Updating..." : "Update Launcher", onclick: applyUpdate }),
+        ] : []),
         h("p", { class: "muted", style: "margin-top:10px", text: state.updateMessage || "Checks whether this launcher git checkout has upstream updates." }),
       ]),
       h("div", { class: "panel" }, [
@@ -342,8 +412,7 @@ function renderSettings(data) {
 function render() {
   if (!state.data) return;
   const prefs = state.data.preferences;
-  document.documentElement.style.setProperty("--accent", prefs.accent || "#f5c211");
-  app.className = `app theme-${prefs.theme || "dark"}`;
+  applyAppearance(prefs);
   app.replaceChildren(h("div", { class: "shell" }, [
     renderTopbar(state.data),
     h("main", { class: "main" }, [renderTerminal(state.data), renderLauncher()]),
@@ -353,15 +422,26 @@ function render() {
   ]));
 }
 
-async function refresh() {
+async function refresh(options = {}) {
   state.data = await api("/api/status");
-  render();
+  applyAppearance(state.data.preferences);
+  if (!options.silent && !(options.skipIfEditing && isEditingField())) render();
 }
 
 async function savePreferences(next) {
+  const previous = { ...state.data.preferences };
   const prefs = { ...state.data.preferences, ...next };
-  await api("/api/preferences", { method: "POST", body: JSON.stringify(prefs) });
-  await refresh();
+  mergePreferences(prefs);
+  if (!isEditingField()) render();
+  try {
+    const result = await api("/api/preferences", { method: "POST", body: JSON.stringify(prefs) });
+    mergePreferences(result.preferences || prefs);
+    window.setTimeout(() => refresh({ skipIfEditing: true }).catch(() => {}), 100);
+  } catch (error) {
+    mergePreferences(previous);
+    render();
+    alert(error.message || String(error));
+  }
 }
 
 async function toggleTheme() {
@@ -382,6 +462,7 @@ async function runScan() {
     const result = await api("/api/scan", { method: "POST", body: "{}" });
     state.scan = result.tools;
     state.setupSelections = new Set(result.tools.filter((tool) => tool.installed).map((tool) => tool.id));
+    state.setupSelectionReady = true;
     await refresh();
   } catch (error) {
     alert(error.message || String(error));
@@ -402,6 +483,7 @@ async function finishSetup() {
     }),
   });
   state.scan = null;
+  state.setupSelectionReady = false;
   await refresh();
 }
 
@@ -438,17 +520,41 @@ async function stop(id) {
   await refresh();
 }
 
-async function checkUpdates() {
+function setUpdateState(self) {
+  state.updateStatus = self || null;
+  state.updateAvailable = Boolean(self && self.available);
+  state.updateMessage = self && self.message ? self.message : "";
+}
+
+async function checkUpdates(options = {}) {
+  const automatic = Boolean(options.automatic);
   state.busy.add("updates");
-  render();
+  if (!automatic && !isEditingField()) render();
   try {
     const result = await api("/api/check-updates", { method: "POST", body: "{}" });
-    state.updateMessage = result.self.message;
-    await refresh();
+    setUpdateState(result.self);
+    await refresh({ skipIfEditing: true });
   } catch (error) {
     state.updateMessage = error.message || String(error);
   } finally {
     state.busy.delete("updates");
+    if (!automatic || !isEditingField()) render();
+  }
+}
+
+async function applyUpdate() {
+  if (!confirm("Update AI Tool Launcher from the upstream repo now?")) return;
+  state.busy.add("apply-update");
+  render();
+  try {
+    const result = await api("/api/apply-update", { method: "POST", body: "{}" });
+    setUpdateState(result.self);
+    state.updateMessage = result.message || "Update complete. Restart the launcher to run the new version.";
+    await refresh({ skipIfEditing: true });
+  } catch (error) {
+    state.updateMessage = error.message || String(error);
+  } finally {
+    state.busy.delete("apply-update");
     render();
   }
 }
@@ -457,23 +563,30 @@ async function boot() {
   const session = await api("/api/session");
   state.token = session.token;
   await refresh();
+  window.setTimeout(() => checkUpdates({ automatic: true }).catch(() => {}), 1200);
 }
 
 window.setInterval(() => {
   state.now = Date.now();
-  render();
+  if (!isEditingField()) render();
 }, 1000);
 
 window.setInterval(() => {
   state.phase += 1;
-  render();
+  if (!isEditingField()) render();
 }, 2600);
 
 window.setInterval(() => {
-  if (state.token && state.data && state.data.preferences.firstRunComplete) {
-    refresh().catch(() => {});
+  if (state.token && state.data && state.data.preferences.firstRunComplete && !isEditingField()) {
+    refresh({ skipIfEditing: true }).catch(() => {});
   }
 }, 6000);
+
+window.setInterval(() => {
+  if (state.token && state.data && !isEditingField()) {
+    checkUpdates({ automatic: true }).catch(() => {});
+  }
+}, 30 * 60 * 1000);
 
 boot().catch((error) => {
   app.replaceChildren(h("div", { class: "boot", text: error.message || String(error) }));

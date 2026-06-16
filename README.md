@@ -1,6 +1,6 @@
 # AI Tool Launcher
 
-AI Tool Launcher is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
+AI Tool Launcher V1.10 is a local, cross-platform web GUI for discovering and launching AI CLI tools and desktop apps from one place.
 
 It is designed for Windows, macOS, and Linux. On first run, the user selects the OS display, scans for installed AI tools, optionally adds tools manually, and then launches the selected tools from a terminal or app launcher.
 
@@ -14,7 +14,8 @@ Project homepage: https://tjbmoose09.github.io/ai-tool-launcher/
 - OS-specific command display and launch behavior
 - Terminal-style status board with rotating version, environment, state, and last-launch details
 - Launcher cards with running indicators and uptime
-- Settings gear for rescanning, checking repo updates, editing the launcher title, and changing the accent color
+- Settings gear for rescanning, editing the launcher title, changing the accent color, and applying repo updates
+- Update notification badge when the upstream repo has a newer launcher version
 - Local-only config storage in the user's OS config directory
 - Localhost API protected by a per-session mutation token
 - No bundled API keys or personal machine configuration
@@ -92,6 +93,10 @@ npm run check
 npm run security:scan
 npm start
 ```
+
+## Versioning
+
+Larger launcher updates use `Vmajor.minor` labels such as `V1.10`. Smaller patch updates should advance the minor label the same way, for example `V1.11`, while the package metadata uses semver-compatible values such as `1.10.0`.
 
 ## Packaging
 
