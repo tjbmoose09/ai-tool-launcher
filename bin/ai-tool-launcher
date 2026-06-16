@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PORT="${AI_TOOL_LAUNCHER_PORT:-47623}"
+HOST="127.0.0.1"
+URL="http://${HOST}:${PORT}"
+
+if [ -n "${XDG_STATE_HOME:-}" ]; then
+  LOG_DIR="${XDG_STATE_HOME}/ai-tool-launcher"
+else
+  LOG_DIR="${HOME}/.local/state/ai-tool-launcher"
+fi
+
+NODE_BIN="${NODE:-}"
+if [ -z "${NODE_BIN}" ]; then
+  NODE_BIN="$(command -v node)"
+fi
+
+mkdir -p "${LOG_DIR}"
+
+if ! curl -fsS "${URL}/api/health" >/dev/null 2>&1; then
+  nohup env AI_TOOL_LAUNCHER_PORT="${PORT}" "${NODE_BIN}" "${APP_DIR}/server.js" >>"${LOG_DIR}/server.log" 2>&1 &
+  for _ in {1..40}; do
+    if curl -fsS "${URL}/api/health" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+fi
+
+if command -v brave >/dev/null 2>&1; then
+  exec brave --app="${URL}" --class=ai-tool-launcher --name="AI Tool Launcher"
+fi
+
+if command -v google-chrome-stable >/dev/null 2>&1; then
+  exec google-chrome-stable --app="${URL}"
+fi
+
+if command -v chromium >/dev/null 2>&1; then
+  exec chromium --app="${URL}"
+fi
+
+if command -v open >/dev/null 2>&1; then
+  exec open "${URL}"
+fi
+
+exec xdg-open "${URL}"

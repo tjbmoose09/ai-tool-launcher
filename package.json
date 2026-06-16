@@ -1,0 +1,34 @@
+{
+  "name": "ai-tool-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-platform local GUI for discovering and launching AI CLI and desktop tools.",
+  "main": "server.js",
+  "bin": {
+    "ai-tool-launcher": "bin/ai-tool-launcher"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/app.js && node --check scripts/install-linux-desktop.js && node --check scripts/pin-kde-taskbar.js && node --check scripts/security-check.js",
+    "security:scan": "node scripts/security-check.js",
+    "desktop:linux": "node scripts/install-linux-desktop.js",
+    "ci": "npm run check && npm run security:scan"
+  },
+  "keywords": [
+    "ai",
+    "launcher",
+    "cli",
+    "desktop",
+    "codex",
+    "claude",
+    "gemini"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tjbmoose09/ai-tool-launcher.git"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,25 @@
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Local runtime/config files. The app writes these under the user's OS config dir,
+# but keep local copies out of git if contributors override paths while testing.
+.env
+.env.*
+config.json
+*.local.json
+*.log
+server.pid
+
+# Build/package outputs
+dist/
+build/
+out/
+release/
+*.AppImage
+*.dmg
+*.exe
+*.msi
+*.deb
+*.rpm
