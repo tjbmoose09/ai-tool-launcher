@@ -118,10 +118,10 @@
             border: 1px solid var(--border);
         }
 
-        /* Video Preview Area */
+        /* Demo Preview Area */
         .video-container {
             margin-top: 100px;
-            background: #000;
+            background: radial-gradient(circle at 70% 28%, #181812 0%, #030303 66%);
             border-radius: 20px;
             border: 1px solid var(--border);
             aspect-ratio: 16/9;
@@ -129,27 +129,206 @@
             position: relative;
             box-shadow: 0 40px 100px rgba(0,0,0,0.8);
         }
-        .video-placeholder {
+        .demo-stage {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
+            inset: 0;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at 22% 18%, rgba(245,194,17,.09), transparent 25%),
+                radial-gradient(circle at 80% 72%, rgba(111,176,124,.08), transparent 24%);
+        }
+        .demo-window {
+            position: absolute;
+            top: 9%;
+            left: 5%;
+            width: 70%;
+            height: 67%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 30px 70px rgba(0,0,0,.55);
+            overflow: hidden;
+        }
+        .demo-header {
+            height: 34px;
+            background: #1C1B15;
+            border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            justify-content: center;
-            background: linear-gradient(45deg, #15140F, #0C0C09);
+            gap: 7px;
+            padding: 0 14px;
         }
-        .play-btn {
-            width: 80px; height: 80px;
+        .demo-dot { width: 9px; height: 9px; border-radius: 50%; background: #444; }
+        .demo-title { margin-left: 6px; color: #6f6c62; font-size: 10px; letter-spacing: 1px; }
+        .demo-content {
+            height: calc(100% - 34px);
+            display: grid;
+            grid-template-columns: 36% 1fr;
+            gap: 14px;
+            padding: 14px;
+        }
+        .demo-status {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: #090906;
+            padding: 12px;
+        }
+        .demo-status-line {
+            height: 8px;
+            margin-bottom: 10px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, #6FB07C, transparent);
+            opacity: .55;
+            animation: statusSweep 3.8s infinite ease-in-out;
+        }
+        .demo-tools { display: flex; flex-direction: column; gap: 10px; }
+        .demo-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            align-items: center;
+            gap: 11px;
+        }
+        .demo-card.gemini { animation: launchGlow 5.5s infinite ease-in-out; }
+        .demo-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: grid;
+            place-items: center;
+            font-weight: 800;
+            color: #fff;
+            flex: 0 0 auto;
+        }
+        .demo-tool-name { color: var(--fg); font-size: 13px; font-weight: 800; }
+        .demo-tool-cmd { color: #6f6c62; font-size: 9px; margin-top: 2px; }
+        .demo-launch {
+            margin-left: auto;
             background: var(--accent);
-            border-radius: 50%;
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            padding: 7px 11px;
+            font-size: 10px;
+            font-weight: 800;
+        }
+        .demo-terminal {
+            position: absolute;
+            right: 5%;
+            bottom: 8%;
+            width: 43%;
+            height: 37%;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            box-shadow: 0 30px 80px rgba(0,0,0,.7);
+            overflow: hidden;
+            animation: terminalLoop 5.5s infinite ease-in-out;
+        }
+        .demo-terminal-head {
+            height: 28px;
+            background: #111;
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 30px;
-            color: #000;
-            cursor: pointer;
-            transition: transform 0.3s;
+            gap: 6px;
+            padding: 0 11px;
         }
-        .play-btn:hover { transform: scale(1.1); }
+        .demo-terminal-body { padding: 13px; color: #6FB07C; font-size: 12px; }
+        .demo-type {
+            display: inline-block;
+            white-space: nowrap;
+            overflow: hidden;
+            max-width: 0;
+            animation: typeLoop 5.5s infinite steps(24, end);
+        }
+        .demo-reply {
+            margin-top: 14px;
+            color: var(--fg);
+            border-left: 2px solid var(--accent);
+            padding-left: 10px;
+            opacity: 0;
+            animation: replyLoop 5.5s infinite ease-in-out;
+        }
+        .demo-cursor {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            color: #fff;
+            filter: drop-shadow(0 1px 1px #000);
+            animation: cursorLoop 5.5s infinite ease-in-out;
+        }
+        @keyframes cursorLoop {
+            0% { left: 86%; top: 82%; transform: scale(1); }
+            25% { left: 77%; top: 42%; transform: scale(1); }
+            34% { left: 77%; top: 42%; transform: scale(.86); }
+            42%, 100% { left: 77%; top: 42%; transform: scale(1); }
+        }
+        @keyframes launchGlow {
+            0%, 27% { box-shadow: none; }
+            36%, 74% { box-shadow: 0 0 0 1px var(--accent), 0 0 22px rgba(245,194,17,.22); }
+            100% { box-shadow: none; }
+        }
+        @keyframes terminalLoop {
+            0%, 86%, 100% { opacity: 1; transform: translateY(0); }
+            94% { opacity: 0; transform: translateY(18px); }
+        }
+        @keyframes typeLoop {
+            0%, 44% { max-width: 0; }
+            62%, 100% { max-width: 230px; }
+        }
+        @keyframes replyLoop {
+            0%, 58% { opacity: 0; }
+            70%, 88% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes statusSweep {
+            0%, 100% { width: 34%; }
+            50% { width: 86%; }
+        }
+        @media (max-width: 760px) {
+            .container { padding: 0 20px; }
+            nav {
+                align-items: flex-start;
+                flex-direction: column;
+                gap: 14px;
+            }
+            .nav-links {
+                flex-wrap: wrap;
+                gap: 12px 18px;
+            }
+            .nav-links a { font-size: 12px; }
+            .hero { padding: 70px 0 48px; }
+            .hero h1 {
+                font-size: 56px;
+                letter-spacing: 0;
+            }
+            .hero p { font-size: 16px; }
+            .cta-group { gap: 12px; }
+            .btn {
+                flex: 1;
+                min-width: 0;
+                padding: 14px 12px;
+                font-size: 12px;
+                text-align: center;
+            }
+            .video-container {
+                margin-top: 64px;
+                aspect-ratio: 4/5;
+                border-radius: 16px;
+            }
+            .demo-window { top: 4%; left: 4%; width: 92%; height: 58%; }
+            .demo-terminal { left: 8%; right: auto; bottom: 5%; width: 84%; height: 30%; }
+            .demo-content { grid-template-columns: 1fr; }
+            .demo-status { display: none; }
+            .demo-card { padding: 8px; gap: 8px; }
+            .demo-icon { width: 28px; height: 28px; }
+            .demo-tool-name { font-size: 11px; }
+            .demo-tool-cmd { font-size: 8px; }
+            .demo-launch { padding: 6px 8px; font-size: 9px; }
+            .demo-terminal-body { padding: 10px; font-size: 10px; }
+        }
 
         /* Footer */
         footer {
@@ -188,15 +367,70 @@
             <h1>Mission Control for your <span>AI Stack</span></h1>
             <p>One terminal-ready dashboard to launch, monitor, and manage all your local LLMs and AI tools. Built for the modern builder.</p>
             <div class="cta-group">
-                <a href="#demo" class="btn btn-primary">WATCH THE AD</a>
+                <a href="#demo" class="btn btn-primary">VIEW DEMO</a>
                 <a href="https://github.com/tjbmoose09/ai-tool-launcher#quick-start" class="btn btn-outline">INSTALL NOW</a>
             </div>
         </section>
 
         <div id="demo" class="video-container">
-            <!-- This will host the ad.html iframe or animation -->
-            <iframe src="ad.html" title="AI Launcher demo advertisement" loading="lazy" style="width:100%; height:100%; border:none;"></iframe>
-            <a href="ad.html" style="position:absolute;right:18px;bottom:14px;color:var(--accent);font-size:11px;font-weight:800;text-decoration:none;background:rgba(12,12,9,.85);border:1px solid var(--border);padding:7px 10px;border-radius:6px">OPEN DEMO</a>
+            <div class="demo-stage" aria-label="Looping AI Launcher demo">
+                <div class="demo-window">
+                    <div class="demo-header">
+                        <span class="demo-dot"></span><span class="demo-dot"></span><span class="demo-dot"></span>
+                        <span class="demo-title">AI LAUNCHER // LINUX</span>
+                    </div>
+                    <div class="demo-content">
+                        <div class="demo-status">
+                            <div class="demo-status-line"></div>
+                            <div class="demo-status-line"></div>
+                            <div class="demo-status-line"></div>
+                            <div class="demo-status-line"></div>
+                        </div>
+                        <div class="demo-tools">
+                            <div class="demo-card">
+                                <div class="demo-icon" style="background:#C15F3C">*</div>
+                                <div>
+                                    <div class="demo-tool-name">Claude 3.7</div>
+                                    <div class="demo-tool-cmd">anthropic-cli --model sonnet</div>
+                                </div>
+                                <button class="demo-launch">LAUNCH</button>
+                            </div>
+                            <div class="demo-card gemini">
+                                <div class="demo-icon" style="background:#3D6FC9">+</div>
+                                <div>
+                                    <div class="demo-tool-name">Gemini 2.0</div>
+                                    <div class="demo-tool-cmd">gemini --cli --ultra</div>
+                                </div>
+                                <button class="demo-launch">LAUNCH</button>
+                            </div>
+                            <div class="demo-card">
+                                <div class="demo-icon" style="background:#2F8F73">O</div>
+                                <div>
+                                    <div class="demo-tool-name">OpenAI o3</div>
+                                    <div class="demo-tool-cmd">openai chat --model o3-mini</div>
+                                </div>
+                                <button class="demo-launch">LAUNCH</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="demo-terminal">
+                    <div class="demo-terminal-head">
+                        <span class="demo-dot" style="background:#ff5f56"></span>
+                        <span class="demo-dot" style="background:#ffbd2e"></span>
+                        <span class="demo-dot" style="background:#27c93f"></span>
+                    </div>
+                    <div class="demo-terminal-body">
+                        $ <span class="demo-type">gemini --cli --ultra</span>
+                        <div class="demo-reply">[SYSTEM] Gemini ready<br>Current latency: 12ms<br><br>&gt; How shall we build today?</div>
+                    </div>
+                </div>
+                <div class="demo-cursor">
+                    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+                        <path fill="currentColor" stroke="#000" stroke-width="1" d="M7 2l12 11.2-5.8.8 3.3 6.1-2.2 1.2-3.3-6.1-4 3.8V2z"/>
+                    </svg>
+                </div>
+            </div>
         </div>
 
         <section id="features" class="bento">
